@@ -397,3 +397,83 @@ where
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use embedded_hal_mock::eh1::i2c::{Mock as I2cMock, Transaction as I2cTransaction};
+
+    #[tokio::test]
+    async fn pin_setup() {
+        let i2c_expectations = [
+            // pin setup io0_0
+            I2cTransaction::write(0x22, vec![0x02, 0xfe]),
+            I2cTransaction::write_read(0x22, vec![0x06], vec![0xff]),
+            I2cTransaction::write(0x22, vec![0x06, 0xfe]),
+            // pin setup io0_7
+            I2cTransaction::write(0x22, vec![0x02, 0x7e]),
+            I2cTransaction::write_read(0x22, vec![0x06], vec![0xfe]),
+            I2cTransaction::write(0x22, vec![0x06, 0x7e]),
+            I2cTransaction::write_read(0x22, vec![0x06], vec![0x7e]),
+            I2cTransaction::write(0x22, vec![0x06, 0xfe]),
+            // pin setup io1_0
+            I2cTransaction::write(0x22, vec![0x03, 0xfe]),
+            I2cTransaction::write_read(0x22, vec![0x07], vec![0xff]),
+            I2cTransaction::write(0x22, vec![0x07, 0xfe]),
+            // pin setup io1_7
+            I2cTransaction::write(0x22, vec![0x03, 0x7e]),
+            I2cTransaction::write_read(0x22, vec![0x07], vec![0xfe]),
+            I2cTransaction::write(0x22, vec![0x07, 0x7e]),
+            I2cTransaction::write_read(0x22, vec![0x07], vec![0x7e]),
+            I2cTransaction::write(0x22, vec![0x07, 0xfe]),
+            // output io0_0, io1_0
+            I2cTransaction::write(0x22, vec![0x02, 0x7f]),
+            I2cTransaction::write(0x22, vec![0x02, 0x7e]),
+            I2cTransaction::write(0x22, vec![0x03, 0x7f]),
+            I2cTransaction::write(0x22, vec![0x03, 0x7e]),
+            // input io0_7, io1_7
+            I2cTransaction::write_read(0x22, vec![0x00], vec![0x80]),
+            I2cTransaction::write_read(0x22, vec![0x00], vec![0x7f]),
+            I2cTransaction::write_read(0x22, vec![0x01], vec![0x80]),
+            I2cTransaction::write_read(0x22, vec![0x01], vec![0x7f]),
+            // polarity io0_7, io1_7
+            I2cTransaction::write_read(0x22, vec![0x04], vec![0x00]),
+            I2cTransaction::write(0x22, vec![0x04, 0x80]),
+            I2cTransaction::write_read(0x22, vec![0x04], vec![0xff]),
+            I2cTransaction::write(0x22, vec![0x04, 0x7f]),
+            I2cTransaction::write_read(0x22, vec![0x05], vec![0x00]),
+            I2cTransaction::write(0x22, vec![0x05, 0x80]),
+            I2cTransaction::write_read(0x22, vec![0x05], vec![0xff]),
+            I2cTransaction::write(0x22, vec![0x05, 0x7f]),
+        ];
+        let mut i2c = I2cMock::new(&i2c_expectations);
+        let address = Address(0, 1, 0);
+        let mut driver = Pca9555::new(i2c.clone(), address.into());
+        let pins = driver.split();
+        let mut pin0 = pins.pin0.into_output().await.unwrap();
+        let pin7 = pins.pin7.into_output().await.unwrap();
+        let mut pin7 = pin7.into_input().await.unwrap();
+
+        let mut pin8 = pins.pin8.into_output().await.unwrap();
+        let pin15 = pins.pin15.into_output().await.unwrap();
+        let mut pin15 = pin15.into_input().await.unwrap();
+
+        // output high and low
+        pin0.set_high().await.unwrap();
+        pin0.set_low().await.unwrap();
+        pin8.set_high().await.unwrap();
+        pin8.set_low().await.unwrap();
+
+        // input high and low
+        assert!(pin7.is_high().await.unwrap());
+        assert!(pin7.is_low().await.unwrap());
+        assert!(pin15.is_high().await.unwrap());
+        assert!(pin15.is_low().await.unwrap());
+
+        let mut pin7 = pin7.into_inverted().await.unwrap();
+        pin7.set_inverted(false).await.unwrap();
+        let mut pin15 = pin15.into_inverted().await.unwrap();
+        pin15.set_inverted(false).await.unwrap();
+        i2c.done();
+    }
+}
