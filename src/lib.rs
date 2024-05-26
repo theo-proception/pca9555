@@ -115,7 +115,6 @@ where
     }
 
     /// Configure this pin as an output with an initial HIGH state.
-    ///
     pub async fn into_output_high(self) -> Result<Pin<'a, mode::Output, I2C>, Error<I>> {
         let mut driver = self.driver.lock().await;
         driver
@@ -228,7 +227,6 @@ seq!(N in 0..16 {
     where
         I2C: I2c<Error = I>,
     {
-        // TODO: Use address contsructor
         pub fn new(i2c: I2C, address: SevenBitAddress) -> Self {
             Self {
                 driver: Mutex::new(PortDriver::new(i2c, address)),
@@ -238,7 +236,7 @@ seq!(N in 0..16 {
         pub fn split(&mut self) -> Parts<'_, I2C, I> {
             Parts {
                 #(
-                    pin~N: Pin::new(&self.driver, 0),
+                    pin~N: Pin::new(&self.driver, N),
                 )*
             }
         }
@@ -256,8 +254,6 @@ where
     I2C: I2c<Error = I>,
 {
     fn new(i2c: I2C, address: SevenBitAddress) -> Self {
-        // TODO: check if we need to do some initialization, otherwise rename this into new and
-        // remove Result
         Self {
             address,
             i2c,
@@ -345,7 +341,7 @@ where
         state: bool,
     ) -> Result<(), Error<I>> {
         // set state before switching direction to prevent glitch
-        if dir == crate::Direction::Output {
+        if dir == Direction::Output {
             if state {
                 self.set(mask, 0).await?;
             } else {
@@ -354,8 +350,8 @@ where
         }
 
         let (mask_set, mask_clear) = match dir {
-            crate::Direction::Input => (mask as u16, 0),
-            crate::Direction::Output => (0, mask as u16),
+            Direction::Input => (mask as u16, 0),
+            Direction::Output => (0, mask as u16),
         };
         if mask & 0x00FF != 0 {
             self.update_reg(
