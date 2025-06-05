@@ -240,6 +240,10 @@ seq!(N in 0..16 {
                 )*
             }
         }
+
+        pub async fn into_driver(self) -> PortDriver<I2C> {
+            self.driver.into_inner()
+        }
     }
 });
 
@@ -253,7 +257,7 @@ impl<I2C, I> PortDriver<I2C>
 where
     I2C: I2c<Error = I>,
 {
-    fn new(i2c: I2C, address: SevenBitAddress) -> Self {
+    pub fn new(i2c: I2C, address: SevenBitAddress) -> Self {
         Self {
             address,
             i2c,
@@ -261,14 +265,14 @@ where
         }
     }
 
-    async fn write_reg(&mut self, reg: Reg, value: u8) -> Result<(), Error<I>> {
+    pub async fn write_reg(&mut self, reg: Reg, value: u8) -> Result<(), Error<I>> {
         self.i2c
             .write(self.address, &[reg.into(), value])
             .await
             .map_err(Error::I2c)
     }
 
-    async fn read_reg(&mut self, reg: Reg) -> Result<u8, Error<I>> {
+    pub async fn read_reg(&mut self, reg: Reg) -> Result<u8, Error<I>> {
         let mut buf = [0x00];
         self.i2c
             .write_read(self.address, &[reg.into()], &mut buf)
@@ -277,7 +281,12 @@ where
         Ok(buf[0])
     }
 
-    async fn update_reg(&mut self, reg: Reg, mask_set: u8, mask_clear: u8) -> Result<(), Error<I>> {
+    pub async fn update_reg(
+        &mut self,
+        reg: Reg,
+        mask_set: u8,
+        mask_clear: u8,
+    ) -> Result<(), Error<I>> {
         let reg = reg.into();
         let mut buf = [0x00];
         self.i2c
@@ -293,7 +302,7 @@ where
         Ok(())
     }
 
-    async fn set(&mut self, mask_high: u32, mask_low: u32) -> Result<(), Error<I>> {
+    pub async fn set(&mut self, mask_high: u32, mask_low: u32) -> Result<(), Error<I>> {
         self.out |= mask_high as u16;
         self.out &= !mask_low as u16;
         if (mask_high | mask_low) & 0x00FF != 0 {
@@ -307,11 +316,11 @@ where
         Ok(())
     }
 
-    fn is_set(&mut self, mask_high: u32, mask_low: u32) -> u32 {
+    pub fn is_set(&mut self, mask_high: u32, mask_low: u32) -> u32 {
         ((self.out as u32) & mask_high) | (!(self.out as u32) & mask_low)
     }
 
-    async fn toggle(&mut self, mask: u32) -> Result<(), Error<I>> {
+    pub async fn toggle(&mut self, mask: u32) -> Result<(), Error<I>> {
         // for all pins which are currently low, make them high.
         let mask_high = self.is_set(0, mask);
         // for all pins which are currently high, make them low.
@@ -319,7 +328,7 @@ where
         self.set(mask_high, mask_low).await
     }
 
-    async fn get(&mut self, mask_high: u32, mask_low: u32) -> Result<u32, Error<I>> {
+    pub async fn get(&mut self, mask_high: u32, mask_low: u32) -> Result<u32, Error<I>> {
         let io0 = if (mask_high | mask_low) & 0x00FF != 0 {
             self.read_reg(Reg::InputPort0).await?
         } else {
@@ -334,7 +343,7 @@ where
         Ok((in_ & mask_high) | (!in_ & mask_low))
     }
 
-    async fn set_direction(
+    pub async fn set_direction(
         &mut self,
         mask: u32,
         dir: Direction,
@@ -372,7 +381,7 @@ where
         Ok(())
     }
 
-    async fn set_polarity(&mut self, mask: u32, inverted: bool) -> Result<(), Error<I>> {
+    pub async fn set_polarity(&mut self, mask: u32, inverted: bool) -> Result<(), Error<I>> {
         let (mask_set, mask_clear) = match inverted {
             false => (0, mask as u16),
             true => (mask as u16, 0),
